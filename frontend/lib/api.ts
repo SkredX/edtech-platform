@@ -1,13 +1,13 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-function getApiKey(): string {
+export function getApiKey(): string {
   if (typeof window === "undefined") return "";
-  return localStorage.getItem("speedlabs_api_key") ?? "";
+  return localStorage.getItem("skredx_edtech_api_key") ?? "";
 }
 
 export function setApiKey(key: string) {
   if (typeof window !== "undefined") {
-    localStorage.setItem("speedlabs_api_key", key);
+    localStorage.setItem("skredx_edtech_api_key", key);
   }
 }
 
