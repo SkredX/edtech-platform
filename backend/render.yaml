@@ -1,0 +1,37 @@
+# Render Blueprint — lets you deploy the backend with "New + > Blueprint"
+# pointing at this repo, instead of clicking through every field by hand.
+# Render free web services: 512 MB RAM, spin down after 15 min idle,
+# cold start ~30-60s on the next request. See backend/../DEPLOYMENT.md
+# for why that RAM ceiling matters for this app and what to do if you
+# hit it.
+services:
+  - type: web
+    name: edtech-rag-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX
+        value: edtech-rag
+      - key: REDIS_URL
+        sync: false
+      - key: TENANT_API_KEYS
+        sync: false
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: GROQ_CHAT_MODEL
+        value: openai/gpt-oss-20b
+      - key: GROQ_CLONE_MODEL
+        value: openai/gpt-oss-120b
+      - key: GROQ_INGEST_MODEL
+        value: openai/gpt-oss-20b
+      - key: CACHE_SIMILARITY_THRESHOLD
+        value: "0.92"
+      - key: CHAT_CONFIDENCE_THRESHOLD
+        value: "0.70"

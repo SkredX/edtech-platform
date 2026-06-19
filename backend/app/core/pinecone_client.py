@@ -3,6 +3,13 @@ Single shared Pinecone index for the whole platform. Multi-tenancy is
 enforced via `namespace=tenant_id` on every read/write — this is what
 keeps one institute's content from ever leaking into another's retrieval
 results, without needing separate indexes (which would cost more).
+
+Updated for pinecone-client v9 (ground-up rewrite, June 2026):
+  - `pc.has_index(name=...)` replaces manually scanning `list_indexes()`
+  - `pc.Index(host=...)` replaces `pc.Index(name_string)` — Pinecone's
+    docs now explicitly discourage targeting an index by name for data
+    operations, so we look the host up once via `describe_index` and
+    cache the handle.
 """
 from functools import lru_cache
 
@@ -21,15 +28,15 @@ def _client() -> Pinecone:
 @lru_cache(maxsize=1)
 def get_index():
     pc = _client()
-    existing = [idx["name"] for idx in pc.list_indexes()]
-    if settings.PINECONE_INDEX not in existing:
+    if not pc.has_index(name=settings.PINECONE_INDEX):
         pc.create_index(
             name=settings.PINECONE_INDEX,
             dimension=EMBEDDING_DIM,
             metric="cosine",
             spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
-    return pc.Index(settings.PINECONE_INDEX)
+    index_config = pc.describe_index(name=settings.PINECONE_INDEX)
+    return pc.Index(host=index_config.host)
 
 
 def upsert_chunks(tenant_id: str, records: list[dict]) -> None:

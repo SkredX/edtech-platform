@@ -4,7 +4,7 @@ original Colab RAG pipeline. No API calls in this module.
 """
 import io
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from PyPDF2 import PdfReader
 
 CHUNK_SIZE = 1000      # characters per chunk — balances context vs. embedding/API cost

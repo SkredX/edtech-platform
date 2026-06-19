@@ -1,30 +1,30 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.9.2
-pydantic-settings==2.5.2
+fastapi==0.137.2
+uvicorn[standard]==0.49.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
 
 # Embeddings / NLP (all local, zero API cost)
-sentence-transformers==3.1.1
-scikit-learn==1.5.2
-spacy==3.7.6
+sentence-transformers==5.6.0
+scikit-learn==1.9.0
+spacy==3.8.14
 numpy==1.26.4
 
-# Chunking
-langchain==0.3.3
-langchain-community==0.3.2
+# Chunking — lightweight splitter package only (avoids the full langchain
+# dependency tree, which matters when RAM is tight on free-tier hosting)
+langchain-text-splitters==0.3.6
 
 # PDF parsing
 PyPDF2==3.0.1
 
-# Vector DB
-pinecone==5.3.1
+# Vector DB — v9 is a ground-up rewrite vs the old pinecone-client package
+pinecone==9.1.0
 
 # LLM
-groq==0.11.0
+groq==1.4.0
 
 # Cache
-redis==5.1.1
+redis==8.0.0
 
 # Misc
-tqdm==4.66.5
-python-multipart==0.0.12
+tqdm==4.68.3
+python-multipart==0.0.32

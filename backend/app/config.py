@@ -8,9 +8,11 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
 
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
-    GROQ_CHAT_MODEL: str = "llama-3.1-8b-instant"        # fast, cheap — chatbot
-    GROQ_CLONE_MODEL: str = "llama-3.3-70b-versatile"    # quality — clonegen
-    GROQ_INGEST_MODEL: str = "llama-3.1-8b-instant"      # centroid topic/summary only
+    # llama-3.1-8b-instant / llama-3.3-70b-versatile were deprecated by Groq
+    # on 2026-06-17. These are their recommended replacements.
+    GROQ_CHAT_MODEL: str = "openai/gpt-oss-20b"          # fast, cheap — chatbot
+    GROQ_CLONE_MODEL: str = "openai/gpt-oss-120b"        # quality — clonegen
+    GROQ_INGEST_MODEL: str = "openai/gpt-oss-20b"        # centroid topic/summary only
 
     CACHE_SIMILARITY_THRESHOLD: float = 0.92
     CHAT_CONFIDENCE_THRESHOLD: float = 0.70
