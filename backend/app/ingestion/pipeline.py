@@ -8,9 +8,9 @@ import hashlib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from app.core.embeddings import embed_texts
 from app.core.pinecone_client import delete_document, upsert_chunks
 from app.ingestion.chunker import chunk_pdf
 from app.ingestion.clusterer import cluster_and_summarize
@@ -26,9 +26,8 @@ def _make_chunk_id(document_name: str, idx: int, text: str) -> str:
 
 def ingest_document(tenant_id: str, pdf_bytes: bytes, filename: str) -> dict:
     raw_chunks = chunk_pdf(pdf_bytes)
-    enriched = cluster_and_summarize(raw_chunks)
-
-    vectors = embed_texts([c["text"] for c in enriched])
+    enriched, embeddings = cluster_and_summarize(raw_chunks)
+    vectors = embeddings.tolist()
 
     # Replace any previous ingest of a document with the same filename,
     # so re-uploading doesn't create duplicate/stale vectors.
@@ -89,7 +88,7 @@ async def ingest(
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     try:
-        result = ingest_document(tenant_id, pdf_bytes, file.filename)
+        result = await run_in_threadpool(ingest_document, tenant_id, pdf_bytes, file.filename)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

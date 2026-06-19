@@ -87,7 +87,7 @@ def _add_entities(chunks: list[dict]) -> None:
         chunks[i]["entities"] = ents[:15]
 
 
-def _cluster_chunks(chunks: list[dict]) -> tuple[np.ndarray, dict[int, int]]:
+def _cluster_chunks(chunks: list[dict]) -> tuple[np.ndarray, dict[int, int], np.ndarray]:
     texts = [c["text"] for c in chunks]
     embeddings = np.array(embed_texts(texts))
 
@@ -109,7 +109,7 @@ def _cluster_chunks(chunks: list[dict]) -> tuple[np.ndarray, dict[int, int]]:
         dists = np.linalg.norm(embeddings[member_idx] - kmeans.cluster_centers_[cid], axis=1)
         centroid_idx[cid] = int(member_idx[np.argmin(dists)])
 
-    return labels, centroid_idx
+    return labels, centroid_idx, embeddings
 
 
 def _call_groq_for_centroid(client, chunk_text: str, max_retries: int = 3) -> tuple[str, str]:
@@ -138,11 +138,13 @@ def _call_groq_for_centroid(client, chunk_text: str, max_retries: int = 3) -> tu
     return "Unknown Topic", ""
 
 
-def cluster_and_summarize(raw_chunks: list[dict]) -> list[dict]:
+def cluster_and_summarize(raw_chunks: list[dict]) -> tuple[list[dict], np.ndarray]:
     """
     Input: [{"text": ..., "source_page": ...}, ...]
-    Output: same chunks enriched with tfidf_keywords, entities, cluster_id,
-            is_cluster_centroid, semantic_topic, context_summary.
+    Output: (chunks, embeddings) — chunks enriched with tfidf_keywords,
+            entities, cluster_id, is_cluster_centroid, semantic_topic,
+            context_summary; embeddings aligned 1:1 with chunks so the
+            caller doesn't need to re-embed the same text a second time.
     Only one Groq call per cluster (centroid), not per chunk.
     """
     from groq import Groq
@@ -151,7 +153,7 @@ def cluster_and_summarize(raw_chunks: list[dict]) -> list[dict]:
 
     _add_tfidf_keywords(chunks)
     _add_entities(chunks)
-    labels, centroid_idx = _cluster_chunks(chunks)
+    labels, centroid_idx, embeddings = _cluster_chunks(chunks)
 
     client = Groq(api_key=settings.GROQ_API_KEY)
     cluster_metadata: dict[int, dict] = {}
@@ -168,4 +170,4 @@ def cluster_and_summarize(raw_chunks: list[dict]) -> list[dict]:
         c["is_cluster_centroid"] = centroid_idx.get(cid) == i
         c["char_count"] = len(c["text"])
 
-    return chunks
+    return chunks, embeddings
