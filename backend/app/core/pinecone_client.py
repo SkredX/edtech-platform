@@ -1,32 +1,64 @@
+"""
+Single shared Pinecone index for the whole platform. Multi-tenancy is
+enforced via `namespace=tenant_id` on every read/write — this is what
+keeps one institute's content from ever leaking into another's retrieval
+results, without needing separate indexes (which would cost more).
+"""
+from functools import lru_cache
+
 from pinecone import Pinecone, ServerlessSpec
+
 from app.config import settings
 
-_pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output dimension
 
+
+@lru_cache(maxsize=1)
+def _client() -> Pinecone:
+    return Pinecone(api_key=settings.PINECONE_API_KEY)
+
+
+@lru_cache(maxsize=1)
 def get_index():
-    existing = [idx.name for idx in _pc.list_indexes()]
+    pc = _client()
+    existing = [idx["name"] for idx in pc.list_indexes()]
     if settings.PINECONE_INDEX not in existing:
-        _pc.create_index(
+        pc.create_index(
             name=settings.PINECONE_INDEX,
-            dimension=384,  # MiniLM-L6-v2 output dim
+            dimension=EMBEDDING_DIM,
             metric="cosine",
             spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
-    return _pc.Index(settings.PINECONE_INDEX)
+    return pc.Index(settings.PINECONE_INDEX)
 
-def upsert_chunks(tenant_id: str, records: list[dict]):
-    """records already contain id, values, metadata — namespace = tenant_id
-    enforces multi-tenant isolation at the Pinecone level."""
+
+def upsert_chunks(tenant_id: str, records: list[dict]) -> None:
+    """records: list of {"id", "values", "metadata"} dicts, already embedded."""
+    if not records:
+        return
     index = get_index()
-    index.upsert(vectors=records, namespace=tenant_id)
+    # Batch upserts at 100 vectors/call to stay well under Pinecone's payload limits
+    for i in range(0, len(records), 100):
+        index.upsert(vectors=records[i : i + 100], namespace=tenant_id)
 
-def query_chunks(tenant_id: str, vector: list[float], top_k: int = 5,
-                  cluster_filter: dict | None = None):
+
+def query_chunks(
+    tenant_id: str,
+    vector: list[float],
+    top_k: int = 5,
+    metadata_filter: dict | None = None,
+):
     index = get_index()
     return index.query(
         namespace=tenant_id,
         vector=vector,
         top_k=top_k,
         include_metadata=True,
-        filter=cluster_filter,
+        filter=metadata_filter,
     )
+
+
+def delete_document(tenant_id: str, document_name: str) -> None:
+    """Remove all chunks for a given source document (e.g. on re-ingest)."""
+    index = get_index()
+    index.delete(namespace=tenant_id, filter={"source_document": {"$eq": document_name}})

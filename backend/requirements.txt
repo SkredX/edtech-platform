@@ -1,0 +1,30 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# Embeddings / NLP (all local, zero API cost)
+sentence-transformers==3.1.1
+scikit-learn==1.5.2
+spacy==3.7.6
+numpy==1.26.4
+
+# Chunking
+langchain==0.3.3
+langchain-community==0.3.2
+
+# PDF parsing
+PyPDF2==3.0.1
+
+# Vector DB
+pinecone==5.3.1
+
+# LLM
+groq==0.11.0
+
+# Cache
+redis==5.1.1
+
+# Misc
+tqdm==4.66.5
+python-multipart==0.0.12
