@@ -24,7 +24,7 @@ services:
       - key: TENANT_API_KEYS
         sync: false
       - key: EMBEDDING_MODEL
-        value: sentence-transformers/all-MiniLM-L6-v2
+        value: llama-text-embed-v2
       - key: GROQ_CHAT_MODEL
         value: openai/gpt-oss-20b
       - key: GROQ_CLONE_MODEL

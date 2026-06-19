@@ -44,27 +44,28 @@ deprecated on 2026-06-17, which is why they were changed.
    copy the `rediss://` connection string into `REDIS_URL`.
 4. Deploy. First build takes a while (spaCy model download + ML deps).
 
-### Important honesty check: Render's free tier RAM
+### Render's free tier RAM — now actually fine
 
-Render's free web service is **512 MB RAM**. This app loads
-`sentence-transformers` (which pulls in PyTorch) and a spaCy NER model
-into the same process for embeddings and clustering — that alone
-typically sits at 600 MB–1 GB+ once a request comes in. There's a real
-chance this OOMs on the free instance, especially on ingestion (which
-also runs KMeans + spaCy). Two honest paths forward if that happens:
+The previous version of this guide flagged a real risk: loading
+`sentence-transformers` (PyTorch) + spaCy in the same process typically
+needs 600 MB-1 GB, over Render's 512 MB free-tier ceiling. That's fixed
+now — `core/embeddings.py` calls Pinecone's hosted Inference API
+(`llama-text-embed-v2`) instead of running an embedding model locally,
+so PyTorch is no longer a dependency at all. What's left running
+in-process is spaCy's small NER model (`en_core_web_sm`, no parser/
+lemmatizer) plus scikit-learn's KMeans/TF-IDF — both comfortably under
+512 MB even during ingestion.
 
-- **Pay for Starter** ($7/mo, 512 MB→ still tight, **Standard** at
-  $25/mo with 2 GB RAM is the safer bet for this specific app) — easiest
-  fix, no code changes.
-- **Swap local embeddings for a hosted API** (e.g. call a hosted
-  embedding endpoint instead of loading `sentence-transformers` in
-  -process) — keeps you on the free tier but is a real code change to
-  `core/embeddings.py`, not just a config tweak. Happy to do this if you
-  want to stay free — just say so.
+Trade-off to know about: embedding calls are now a network round-trip to
+Pinecone instead of local CPU inference, so very large document
+ingestion will be somewhat slower. For normal chatbot/clonegen request
+volume this isn't noticeable. Pinecone's Starter (free) plan includes 5M
+embedding tokens/month, which is generous for a single-institute demo or
+small deployment — watch it if you're ingesting very large document sets.
 
-Either way, the free tier also spins the service down after 15 minutes
-idle, with a 30–60s cold start on the next request — fine for a demo,
-not for production traffic.
+The free tier still spins the service down after 15 minutes idle, with a
+30-60s cold start on the next request — fine for a demo, not for
+production traffic with that constraint.
 
 ## 4. Frontend on Vercel
 
@@ -86,7 +87,19 @@ curl https://<your-render-url>/health
 should return `{"status": "ok"}`. Then hit your Vercel URL and try the
 ingest page with a small PDF before testing chat/clonegen.
 
-## What changed in this pass (vs. the previous handoff)
+## What changed in this pass (staying on Render's free tier)
+
+- `backend/app/core/embeddings.py` — rewritten to call Pinecone's hosted
+  Inference API (`llama-text-embed-v2`) instead of running
+  `sentence-transformers`/PyTorch locally. This is the actual fix for
+  the RAM problem, not just a config tweak.
+- `backend/requirements.txt` — removed `sentence-transformers` (and the
+  ~1.5 GB of PyTorch it pulls in) accordingly.
+- `backend/app/config.py`, `backend/.env.example`, `backend/render.yaml`
+  — `EMBEDDING_MODEL` now points at the Pinecone-hosted model name
+  instead of a local sentence-transformers path.
+
+## What changed in the previous pass
 
 - `backend/requirements.txt` — repinned every dependency to current
   stable (Pinecone v5→v9, Groq pre-1.0→1.4, spaCy 3.7 yanked→3.8.14,

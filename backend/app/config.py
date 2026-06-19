@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     PINECONE_INDEX: str = "edtech-rag"
     REDIS_URL: str = "redis://localhost:6379"
 
-    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_MODEL: str = "llama-text-embed-v2"  # Pinecone-hosted, not run locally
     # llama-3.1-8b-instant / llama-3.3-70b-versatile were deprecated by Groq
     # on 2026-06-17. These are their recommended replacements.
     GROQ_CHAT_MODEL: str = "openai/gpt-oss-20b"          # fast, cheap — chatbot

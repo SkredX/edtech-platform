@@ -3,8 +3,8 @@ uvicorn[standard]==0.49.0
 pydantic==2.13.4
 pydantic-settings==2.14.2
 
-# Embeddings / NLP (all local, zero API cost)
-sentence-transformers==5.6.0
+# NLP / clustering (local, zero API cost — spaCy's small model is light,
+# unlike sentence-transformers/torch which we removed; see core/embeddings.py)
 scikit-learn==1.9.0
 spacy==3.8.14
 numpy==1.26.4
