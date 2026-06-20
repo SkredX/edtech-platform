@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -89,6 +90,14 @@ export default function IngestPage() {
               <p className="text-muted-foreground">Groq calls used</p>
               <p className="text-lg font-medium">{result.groq_calls_used}</p>
             </div>
+          </CardContent>
+          <CardContent className="flex gap-3 pt-0">
+            <Button asChild className="flex-1">
+              <Link href="/chat">Ask a doubt about this</Link>
+            </Button>
+            <Button asChild variant="outline" className="flex-1">
+              <Link href="/admin/clonegen">Generate questions</Link>
+            </Button>
           </CardContent>
         </Card>
       )}

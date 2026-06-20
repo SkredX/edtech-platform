@@ -7,6 +7,9 @@ from app.config import settings
 from app.core.cache import get_cached, set_cached
 from app.core.retrieval import retrieve_context
 from app.tenants.auth import get_tenant_id
+import logging
+
+logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/chat", tags=["chatbot"])
 _groq = Groq(api_key=settings.GROQ_API_KEY)
@@ -34,6 +37,10 @@ def chat(req: ChatRequest, tenant_id: str = Depends(get_tenant_id)):
         return {**cached, "from_cache": True}
 
     chunks, confidence = retrieve_context(tenant_id, req.message, top_k=5)
+    logger.info(
+        "chat query tenant=%s confidence=%.4f threshold=%.4f matched_chunks=%d",
+        tenant_id, confidence, settings.CHAT_CONFIDENCE_THRESHOLD, len(chunks),
+    )
 
     if not chunks or should_escalate(confidence):
         return escalation_response()

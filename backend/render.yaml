@@ -34,4 +34,4 @@ services:
       - key: CACHE_SIMILARITY_THRESHOLD
         value: "0.92"
       - key: CHAT_CONFIDENCE_THRESHOLD
-        value: "0.70"
+        value: "0.40"
