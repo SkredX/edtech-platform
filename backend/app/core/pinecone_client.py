@@ -66,6 +66,19 @@ def query_chunks(
 
 
 def delete_document(tenant_id: str, document_name: str) -> None:
-    """Remove all chunks for a given source document (e.g. on re-ingest)."""
+    """Remove all chunks for a given source document (e.g. on re-ingest).
+
+    A tenant's namespace doesn't exist in Pinecone until their first
+    successful upsert, and v9's client raises NotFoundError (rather than
+    silently no-op'ing) if you call delete() against a namespace that
+    isn't there yet — which is exactly what happens on every tenant's
+    very first upload. That's not actually an error from our point of
+    view: "nothing to delete" is the correct outcome either way.
+    """
+    from pinecone.errors.exceptions import NotFoundError
+
     index = get_index()
-    index.delete(namespace=tenant_id, filter={"source_document": {"$eq": document_name}})
+    try:
+        index.delete(namespace=tenant_id, filter={"source_document": {"$eq": document_name}})
+    except NotFoundError:
+        pass
