@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChatInput, ChatInputSubmit, ChatInputTextArea } from "@/components/ui/chat-input";
 import { Card, CardContent } from "@/components/ui/card";
+import { MarkdownMessage } from "@/components/ui/markdown-message";
 import { apiGet, apiPost } from "@/lib/api";
 
 interface Message {
@@ -144,8 +145,15 @@ export default function ChatPage() {
             key={i}
             className={m.role === "user" ? "ml-auto bg-primary/10 max-w-[80%]" : "max-w-[80%]"}
           >
-            <CardContent className="p-3 text-sm">
-              {m.content}
+            <CardContent className="p-3">
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {m.role === "user" ? "You" : "Doubt Assistant"}
+              </p>
+              {m.role === "assistant" ? (
+                <MarkdownMessage content={m.content} />
+              ) : (
+                <p className="text-sm leading-relaxed">{m.content}</p>
+              )}
               {m.escalate && (
                 <p className="mt-2 text-xs text-amber-600">
                   This was escalated — your teacher will follow up.

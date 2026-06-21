@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from app.core.document_registry import list_documents, register_document
+from app.core.document_registry import backfill_registry_from_pinecone, list_documents, register_document
 from app.core.pinecone_client import delete_document, upsert_chunks
 from app.ingestion.chunker import chunk_pdf
 from app.ingestion.clusterer import cluster_and_summarize
@@ -113,3 +113,24 @@ def get_documents(tenant_id: str = Depends(get_tenant_id)):
     retrieval to one ingested document instead of searching the whole
     tenant corpus."""
     return list_documents(tenant_id)
+
+
+class BackfillResponse(BaseModel):
+    backfilled_documents: list[str]
+    already_registered: list[str]
+    total_distinct_documents_in_pinecone: int
+
+
+@router.post("/backfill-registry", response_model=BackfillResponse)
+def backfill_registry(tenant_id: str = Depends(get_tenant_id)):
+    """
+    One-time (but safely repeatable) resync: reads every chunk's
+    `source_document` metadata directly out of Pinecone and registers any
+    document missing from the chat page's chapter picker — this is what
+    recovers chapters that were uploaded before the picker's Redis registry
+    existed, or any time Redis was flushed/redeployed without retaining
+    its data. Safe to call again later; already-registered documents are
+    left untouched. See `document_registry.backfill_registry_from_pinecone`
+    for the cost breakdown (no embedding or Groq calls).
+    """
+    return backfill_registry_from_pinecone(tenant_id)

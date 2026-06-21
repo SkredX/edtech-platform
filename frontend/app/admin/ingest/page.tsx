@@ -5,7 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { apiUpload } from "@/lib/api";
+import { apiPost, apiUpload } from "@/lib/api";
 
 interface IngestResponse {
   document_name: string;
@@ -15,10 +15,38 @@ interface IngestResponse {
   groq_calls_used: number;
 }
 
+interface BackfillResponse {
+  backfilled_documents: string[];
+  already_registered: string[];
+  total_distinct_documents_in_pinecone: number;
+}
+
 export default function IngestPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<IngestResponse | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<BackfillResponse | null>(null);
+
+  const handleBackfill = async () => {
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const data = await apiPost<BackfillResponse>("/ingest/backfill-registry", {});
+      setBackfillResult(data);
+      if (data.backfilled_documents.length > 0) {
+        toast.success(
+          `Recovered ${data.backfilled_documents.length} chapter${data.backfilled_documents.length > 1 ? "s" : ""} from Pinecone.`
+        );
+      } else {
+        toast.success("Everything in Pinecone is already in the chapter picker — nothing to recover.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Resync failed.");
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,6 +96,49 @@ export default function IngestPage() {
             className="block w-full text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
           />
           {uploading && <p className="text-sm text-muted-foreground">Processing — this can take a few minutes for large documents…</p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Resync chapter picker</CardTitle>
+          <CardDescription>
+            If a chapter exists in Pinecone but isn&apos;t showing up on the{" "}
+            <Link href="/chat" className="underline">
+              Ask a Doubt
+            </Link>{" "}
+            page — for example, chapters uploaded before this picker existed — run this to
+            recover them. Reads metadata already in Pinecone; no Groq or embedding calls.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button onClick={handleBackfill} disabled={backfilling} variant="outline">
+            {backfilling ? "Scanning Pinecone…" : "Resync from Pinecone"}
+          </Button>
+          {backfillResult && (
+            <div className="text-sm space-y-1">
+              <p>
+                <span className="text-muted-foreground">Distinct chapters found in Pinecone: </span>
+                <span className="font-medium">{backfillResult.total_distinct_documents_in_pinecone}</span>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Already in picker: </span>
+                <span className="font-medium">{backfillResult.already_registered.length}</span>
+              </p>
+              {backfillResult.backfilled_documents.length > 0 ? (
+                <div>
+                  <p className="text-muted-foreground">Recovered just now:</p>
+                  <ul className="ml-4 list-disc">
+                    {backfillResult.backfilled_documents.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Nothing missing — the picker is already in sync.</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

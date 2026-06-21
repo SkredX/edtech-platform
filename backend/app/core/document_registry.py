@@ -91,3 +91,70 @@ def list_documents(tenant_id: str) -> list[dict]:
 
 def remove_document(tenant_id: str, filename: str) -> None:
     _r.hdel(REGISTRY_KEY_TMPL.format(tenant_id=tenant_id), filename)
+
+
+def backfill_registry_from_pinecone(tenant_id: str) -> dict:
+    """
+    Rebuilds missing registry entries by reading ground truth directly out
+    of Pinecone, for documents that were ingested before this Redis
+    registry existed (or any time Redis itself was flushed/redeployed
+    without its data persisting) and therefore never got a
+    `register_document()` call — those documents' chunks are fully present
+    and searchable in Pinecone, just invisible to the chapter picker, which
+    only ever reads Redis.
+
+    Cost profile: there is no "list distinct metadata values" query in
+    Pinecone (see the module docstring above), so recovering every
+    filename requires reading `source_document` off every vector at least
+    once. This is done via `index.list()` (ID-only, paginated, cheap) to
+    get every vector ID in the tenant's namespace, then `index.fetch()` in
+    batches of 100 IDs per call to pull metadata — for a corpus of ~900
+    chunks that's ~9 fetch calls total, a one-time bounded cost, not
+    proportional to query volume. No embedding model call and no Groq
+    call happen anywhere in this function, so it costs nothing on the
+    paid-API budget the rest of this upgrade is trying to protect.
+
+    Idempotent: documents already in the registry are left completely
+    untouched, so this is safe to run repeatedly (e.g. as an admin "resync"
+    button after every bulk upload, or on a schedule).
+    """
+    from app.core.pinecone_client import get_index
+
+    index = get_index()
+    existing = {d["document_name"] for d in list_documents(tenant_id)}
+
+    chunk_counts: dict[str, int] = {}
+
+    def _fetch_batch(ids: list[str]) -> None:
+        if not ids:
+            return
+        fetched = index.fetch(ids=ids, namespace=tenant_id)
+        records = fetched.get("vectors", {}) if isinstance(fetched, dict) else fetched.vectors
+        for rec in records.values():
+            meta = (rec.get("metadata", {}) if isinstance(rec, dict) else rec.metadata) or {}
+            doc_name = meta.get("source_document")
+            if doc_name:
+                chunk_counts[doc_name] = chunk_counts.get(doc_name, 0) + 1
+
+    batch: list[str] = []
+    for page in index.list(namespace=tenant_id):
+        ids = page if isinstance(page, list) else getattr(page, "ids", page)
+        for vec_id in ids:
+            batch.append(vec_id)
+            if len(batch) >= 100:
+                _fetch_batch(batch)
+                batch = []
+    _fetch_batch(batch)
+
+    backfilled = []
+    for doc_name, count in chunk_counts.items():
+        if doc_name in existing:
+            continue
+        register_document(tenant_id, doc_name, chunk_count=count)
+        backfilled.append(doc_name)
+
+    return {
+        "backfilled_documents": sorted(backfilled),
+        "already_registered": sorted(existing),
+        "total_distinct_documents_in_pinecone": len(chunk_counts),
+    }
