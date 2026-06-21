@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChatInput, ChatInputSubmit, ChatInputTextArea } from "@/components/ui/chat-input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,14 +38,49 @@ export default function ChatPage() {
   const [docsLoading, setDocsLoading] = useState(true);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
 
+  // Prevent the auto-backfill from firing twice in React Strict Mode
+  const backfillRan = useRef(false);
+
   useEffect(() => {
-    apiGet<DocumentInfo[]>("/ingest/documents")
-      .then(setDocuments)
-      .catch(() => {
-        // Silent: chat still works searching the whole corpus without a
-        // chapter picker if this fails (e.g. no documents ingested yet).
-      })
-      .finally(() => setDocsLoading(false));
+    if (backfillRan.current) return;
+    backfillRan.current = true;
+
+    /**
+     * On every page load:
+     * 1. POST /ingest/backfill-registry — silently recovers any chapters
+     *    that were uploaded before the Redis registry existed (or after a
+     *    Redis flush). This is idempotent (already-registered docs are
+     *    untouched), costs zero Groq/embedding calls, and is fast enough
+     *    (~9 Pinecone fetch calls for a ~900-chunk corpus) to run quietly
+     *    in the background before the GET /ingest/documents resolves.
+     * 2. GET /ingest/documents — populates the chapter picker with the
+     *    now-complete registry.
+     *
+     * Running backfill first means the chapter list is always in sync with
+     * Pinecone even for documents uploaded before this registry existed,
+     * without requiring any admin action.
+     */
+    const loadDocuments = async () => {
+      try {
+        // Step 1: silent background backfill (no toast on success)
+        await apiPost("/ingest/backfill-registry", {});
+      } catch {
+        // Non-fatal: the chapter picker still works for documents that
+        // were registered normally; missing ones just won't appear yet.
+      }
+
+      // Step 2: fetch the (now-complete) document list
+      try {
+        const docs = await apiGet<DocumentInfo[]>("/ingest/documents");
+        setDocuments(docs);
+      } catch {
+        // Silent: chat still works without a chapter picker
+      } finally {
+        setDocsLoading(false);
+      }
+    };
+
+    loadDocuments();
   }, []);
 
   const toggleDoc = (documentName: string) => {
@@ -97,6 +132,9 @@ export default function ChatPage() {
           <span className="text-xs text-muted-foreground mr-1">Chapters:</span>
           {documents.map((doc) => {
             const isSelected = selectedDocs.has(doc.document_name);
+            // Use the clean parsed chapter name when available, fall back to
+            // the full label (which is already better than the raw filename).
+            const displayName = doc.chapter ?? doc.label;
             return (
               <button
                 key={doc.document_name}
@@ -110,7 +148,7 @@ export default function ChatPage() {
                     : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 }`}
               >
-                {doc.label}
+                {displayName}
                 {isSelected && <span aria-hidden="true">×</span>}
               </button>
             );

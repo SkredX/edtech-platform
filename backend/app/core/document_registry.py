@@ -19,6 +19,11 @@ they don't crash anything, they just won't get a parsed label):
               grade+   chapter name
               subject
                 code
+
+Supported variants (all handled by the regex below):
+    LP_NEET_11B_Animal Kingdom_26-27_Without detailed solution (1).pdf
+    LP_NEET_12B_Evolution_26-27_without detailed solutions.pdf
+    LP_NEET_11B_Cell the unit of life_without solutions.pdf
 """
 import json
 import re
@@ -39,8 +44,27 @@ _SUBJECT_LABELS = {
     "M": "Mathematics",
 }
 
+# Matches filenames like:
+#   LP_NEET_11B_Cell the unit of life_without solutions.pdf
+#   LP_NEET_11B_Animal Kingdom_26-27_Without detailed solution (1).pdf
+#   LP_NEET_12B_Evolution_26-27_without detailed solutions.pdf
+#
+# Breakdown:
+#   LP_NEET_          — fixed institute prefix (ignored)
+#   (\d{2})([A-Za-z]) — grade (e.g. 11) + subject code (e.g. B)
+#   _                 — separator
+#   (.+?)             — chapter name (non-greedy, captured)
+#   (?:_\d{2}-\d{2})? — optional academic year like _26-27 (ignored)
+#   _[Ww]ithout\s+(?:detailed\s+)?solutions?(?:\s*\(\d+\))?
+#                     — trailing "_without [detailed] solution[s] [(N)]" (ignored)
+#   \.pdf$
 _FILENAME_RE = re.compile(
-    r"^LP_NEET_(?P<grade>\d{2})(?P<subject>[A-Za-z])_(?P<chapter>.+?)_without[ _]solutions\.pdf$",
+    r"^LP_NEET_"
+    r"(?P<grade>\d{2})(?P<subject>[A-Za-z])_"
+    r"(?P<chapter>.+?)"
+    r"(?:_\d{2}-\d{2})?"                           # optional year e.g. _26-27
+    r"_[Ww]ithout\s+(?:detailed\s+)?solutions?(?:\s*\(\d+\))?"  # trailing suffix
+    r"\.pdf$",
     re.IGNORECASE,
 )
 
@@ -51,6 +75,14 @@ def parse_document_name(filename: str) -> dict:
     successful parse, or all-None fields (except the raw filename) if the
     filename doesn't match the expected convention — callers should treat
     that as "ungrouped" rather than failing.
+
+    Examples:
+        "LP_NEET_11B_Animal Kingdom_26-27_Without detailed solution (1).pdf"
+            -> chapter="Animal Kingdom", label="11B · Animal Kingdom"
+        "LP_NEET_12B_Evolution_26-27_without detailed solutions.pdf"
+            -> chapter="Evolution", label="12B · Evolution"
+        "LP_NEET_11B_Cell the unit of life_without solutions.pdf"
+            -> chapter="Cell the unit of life", label="11B · Cell the unit of life"
     """
     m = _FILENAME_RE.match(filename.strip())
     if not m:
@@ -64,7 +96,8 @@ def parse_document_name(filename: str) -> dict:
 
     grade = m.group("grade")
     subject_code = m.group("subject").upper()
-    chapter = m.group("chapter").strip()
+    # Strip any stray underscores left at the edges of the chapter capture
+    chapter = m.group("chapter").strip().strip("_").strip()
     subject_label = _SUBJECT_LABELS.get(subject_code, subject_code)
 
     return {
