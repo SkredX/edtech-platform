@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChatInput, ChatInputSubmit, ChatInputTextArea } from "@/components/ui/chat-input";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiPost } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { apiGet, apiPost } from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -18,10 +19,34 @@ interface ChatApiResponse {
   from_cache: boolean;
 }
 
+interface DocumentInfo {
+  document_name: string;
+  grade: string | null;
+  subject_code: string | null;
+  subject_label: string | null;
+  chapter: string | null;
+  label: string;
+  chunk_count: number;
+}
+
 export default function ChatPage() {
   const [value, setValue] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [documents, setDocuments] = useState<DocumentInfo[]>([]);
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [selectedDoc, setSelectedDoc] = useState<DocumentInfo | null>(null);
+
+  useEffect(() => {
+    apiGet<DocumentInfo[]>("/ingest/documents")
+      .then(setDocuments)
+      .catch(() => {
+        // Silent: chat still works searching the whole corpus without a
+        // chapter picker if this fails (e.g. no documents ingested yet).
+      })
+      .finally(() => setDocsLoading(false));
+  }, []);
 
   const handleSubmit = async () => {
     if (!value.trim()) return;
@@ -31,7 +56,10 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const data = await apiPost<ChatApiResponse>("/chat", { message: userMsg.content });
+      const data = await apiPost<ChatApiResponse>("/chat", {
+        message: userMsg.content,
+        document_name: selectedDoc?.document_name ?? null,
+      });
       setMessages((m) => [
         ...m,
         { role: "assistant", content: data.answer, escalate: data.escalate },
@@ -50,10 +78,41 @@ export default function ChatPage() {
         <p className="text-sm text-muted-foreground">Answers grounded in your course material only.</p>
       </header>
 
+      {documents.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pb-1">
+          <span className="text-xs text-muted-foreground mr-1">Search:</span>
+          <Button
+            size="sm"
+            variant={selectedDoc === null ? "default" : "outline"}
+            onClick={() => setSelectedDoc(null)}
+          >
+            All chapters
+          </Button>
+          {documents.map((doc) => (
+            <Button
+              key={doc.document_name}
+              size="sm"
+              variant={selectedDoc?.document_name === doc.document_name ? "default" : "outline"}
+              onClick={() => setSelectedDoc(doc)}
+              title={`${doc.chunk_count} chunks`}
+            >
+              {doc.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto space-y-3">
-        {messages.length === 0 && (
+        {messages.length === 0 && !docsLoading && documents.length === 0 && (
           <p className="text-sm text-muted-foreground py-8 text-center">
             Ask anything about your syllabus to get started.
+          </p>
+        )}
+        {messages.length === 0 && documents.length > 0 && (
+          <p className="text-sm text-muted-foreground py-8 text-center">
+            {selectedDoc
+              ? `Searching only "${selectedDoc.label}" — ask away, or pick "All chapters" to widen the search.`
+              : "Pick a chapter above to narrow your search, or ask anything to search everything."}
           </p>
         )}
         {messages.map((m, i) => (
@@ -82,7 +141,13 @@ export default function ChatPage() {
         onSubmit={handleSubmit}
         loading={loading}
       >
-        <ChatInputTextArea placeholder="Ask a doubt about your course..." />
+        <ChatInputTextArea
+          placeholder={
+            selectedDoc
+              ? `Ask a doubt about ${selectedDoc.label}...`
+              : "Ask a doubt about your course..."
+          }
+        />
         <ChatInputSubmit />
       </ChatInput>
     </div>

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
+from app.core.document_registry import list_documents, register_document
 from app.core.pinecone_client import delete_document, upsert_chunks
 from app.ingestion.chunker import chunk_pdf
 from app.ingestion.clusterer import cluster_and_summarize
@@ -56,6 +57,7 @@ def ingest_document(tenant_id: str, pdf_bytes: bytes, filename: str) -> dict:
         )
 
     upsert_chunks(tenant_id, records)
+    register_document(tenant_id, filename, chunk_count=len(records))
 
     n_clusters = len({c["cluster_id"] for c in enriched})
     return {
@@ -93,3 +95,21 @@ async def ingest(
         raise HTTPException(status_code=422, detail=str(e))
 
     return result
+
+
+class DocumentInfo(BaseModel):
+    document_name: str
+    grade: str | None
+    subject_code: str | None
+    subject_label: str | None
+    chapter: str | None
+    label: str
+    chunk_count: int
+
+
+@router.get("/documents", response_model=list[DocumentInfo])
+def get_documents(tenant_id: str = Depends(get_tenant_id)):
+    """Powers the chapter picker on the chat page — lets a student narrow
+    retrieval to one ingested document instead of searching the whole
+    tenant corpus."""
+    return list_documents(tenant_id)

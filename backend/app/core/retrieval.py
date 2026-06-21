@@ -56,6 +56,7 @@ def retrieve_context(
     query: str,
     top_k: int = 5,
     rerank: bool = False,
+    document_name: str | None = None,
 ) -> tuple[list[dict], float]:
     """
     Returns (chunks, top_confidence_score). Confidence feeds the chatbot's
@@ -65,11 +66,19 @@ def retrieve_context(
     capped at 20) and re-ranks locally via TF-IDF before trimming back down
     to top_k — useful when Pinecone's pure vector similarity surfaces
     near-duplicates from the same cluster.
+
+    If `document_name` is given, retrieval is scoped to chunks from that
+    one ingested document only (Pinecone metadata filter on
+    `source_document`) instead of the tenant's whole corpus — this is
+    what the chat page's chapter picker uses, so a query against a
+    180-chunk chapter doesn't compete with the other 360 chunks from
+    unrelated chapters.
     """
     q_vec = embed_query(query)
     pull_k = min(top_k * 3, 20) if rerank else top_k
+    metadata_filter = {"source_document": {"$eq": document_name}} if document_name else None
 
-    result = query_chunks(tenant_id, q_vec, top_k=pull_k)
+    result = query_chunks(tenant_id, q_vec, top_k=pull_k, metadata_filter=metadata_filter)
     matches = result.get("matches", []) if isinstance(result, dict) else result.matches
 
     if not matches:

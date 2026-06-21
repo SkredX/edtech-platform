@@ -23,7 +23,7 @@ export default function Home() {
               <Link href="/chat">
                 <Button size="lg">Ask a doubt</Button>
               </Link>
-              <Link href="/admin/ingest">
+              <Link href="/admin">
                 <Button size="lg" variant="outline" className="bg-white/10 text-white border-white/30">
                   Teacher dashboard
                 </Button>

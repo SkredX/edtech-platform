@@ -22,6 +22,7 @@ Always cite the source page/topic in your answer."""
 
 class ChatRequest(BaseModel):
     message: str
+    document_name: str | None = None  # set when the chapter picker scopes the query
 
 
 class ChatResponse(BaseModel):
@@ -32,14 +33,19 @@ class ChatResponse(BaseModel):
 
 @router.post("", response_model=ChatResponse)
 def chat(req: ChatRequest, tenant_id: str = Depends(get_tenant_id)):
-    cached = get_cached(tenant_id, req.message, scope="chat")
+    # Cache key includes the document filter — a chapter-scoped answer and
+    # an unscoped answer to the same question aren't necessarily the same.
+    cache_key = f"{req.message}|doc={req.document_name or ''}"
+    cached = get_cached(tenant_id, cache_key, scope="chat")
     if cached:
         return {**cached, "from_cache": True}
 
-    chunks, confidence = retrieve_context(tenant_id, req.message, top_k=5)
+    chunks, confidence = retrieve_context(
+        tenant_id, req.message, top_k=5, document_name=req.document_name
+    )
     logger.info(
-        "chat query tenant=%s confidence=%.4f threshold=%.4f matched_chunks=%d",
-        tenant_id, confidence, settings.CHAT_CONFIDENCE_THRESHOLD, len(chunks),
+        "chat query tenant=%s doc=%s confidence=%.4f threshold=%.4f matched_chunks=%d",
+        tenant_id, req.document_name, confidence, settings.CHAT_CONFIDENCE_THRESHOLD, len(chunks),
     )
 
     if not chunks or should_escalate(confidence):
@@ -62,5 +68,5 @@ def chat(req: ChatRequest, tenant_id: str = Depends(get_tenant_id)):
     answer = resp.choices[0].message.content
 
     result = {"answer": answer, "escalate": False}
-    set_cached(tenant_id, req.message, scope="chat", response=result)
+    set_cached(tenant_id, cache_key, scope="chat", response=result)
     return {**result, "from_cache": False}
