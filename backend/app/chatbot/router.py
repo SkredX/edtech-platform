@@ -22,7 +22,8 @@ Always cite the source page/topic in your answer."""
 
 class ChatRequest(BaseModel):
     message: str
-    document_name: str | None = None  # set when the chapter picker scopes the query
+    document_name: str | None = None  # deprecated single-chapter filter, kept for back-compat
+    document_names: list[str] | None = None  # set when the chapter picker scopes the query to one or more chapters
 
 
 class ChatResponse(BaseModel):
@@ -33,19 +34,25 @@ class ChatResponse(BaseModel):
 
 @router.post("", response_model=ChatResponse)
 def chat(req: ChatRequest, tenant_id: str = Depends(get_tenant_id)):
-    # Cache key includes the document filter — a chapter-scoped answer and
-    # an unscoped answer to the same question aren't necessarily the same.
-    cache_key = f"{req.message}|doc={req.document_name or ''}"
+    # Normalize both the legacy single-doc field and the new multi-doc field
+    # into one list so retrieval only has one shape to deal with.
+    doc_names = req.document_names or ([req.document_name] if req.document_name else None)
+
+    # Cache key includes the document filter (sorted so selection order
+    # doesn't fragment the cache) — a chapter-scoped answer and an
+    # unscoped answer to the same question aren't necessarily the same.
+    doc_key = ",".join(sorted(doc_names)) if doc_names else ""
+    cache_key = f"{req.message}|docs={doc_key}"
     cached = get_cached(tenant_id, cache_key, scope="chat")
     if cached:
         return {**cached, "from_cache": True}
 
     chunks, confidence = retrieve_context(
-        tenant_id, req.message, top_k=5, document_name=req.document_name
+        tenant_id, req.message, top_k=5, document_names=doc_names
     )
     logger.info(
-        "chat query tenant=%s doc=%s confidence=%.4f threshold=%.4f matched_chunks=%d",
-        tenant_id, req.document_name, confidence, settings.CHAT_CONFIDENCE_THRESHOLD, len(chunks),
+        "chat query tenant=%s docs=%s confidence=%.4f threshold=%.4f matched_chunks=%d",
+        tenant_id, doc_names, confidence, settings.CHAT_CONFIDENCE_THRESHOLD, len(chunks),
     )
 
     if not chunks or should_escalate(confidence):

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChatInput, ChatInputSubmit, ChatInputTextArea } from "@/components/ui/chat-input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { apiGet, apiPost } from "@/lib/api";
 
 interface Message {
@@ -36,7 +35,7 @@ export default function ChatPage() {
 
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [docsLoading, setDocsLoading] = useState(true);
-  const [selectedDoc, setSelectedDoc] = useState<DocumentInfo | null>(null);
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     apiGet<DocumentInfo[]>("/ingest/documents")
@@ -48,6 +47,20 @@ export default function ChatPage() {
       .finally(() => setDocsLoading(false));
   }, []);
 
+  const toggleDoc = (documentName: string) => {
+    setSelectedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(documentName)) {
+        next.delete(documentName);
+      } else {
+        next.add(documentName);
+      }
+      return next;
+    });
+  };
+
+  const clearDocs = () => setSelectedDocs(new Set());
+
   const handleSubmit = async () => {
     if (!value.trim()) return;
     const userMsg: Message = { role: "user", content: value };
@@ -58,7 +71,7 @@ export default function ChatPage() {
     try {
       const data = await apiPost<ChatApiResponse>("/chat", {
         message: userMsg.content,
-        document_name: selectedDoc?.document_name ?? null,
+        document_names: selectedDocs.size > 0 ? Array.from(selectedDocs) : null,
       });
       setMessages((m) => [
         ...m,
@@ -80,25 +93,36 @@ export default function ChatPage() {
 
       {documents.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 pb-1">
-          <span className="text-xs text-muted-foreground mr-1">Search:</span>
-          <Button
-            size="sm"
-            variant={selectedDoc === null ? "default" : "outline"}
-            onClick={() => setSelectedDoc(null)}
-          >
-            All chapters
-          </Button>
-          {documents.map((doc) => (
-            <Button
-              key={doc.document_name}
-              size="sm"
-              variant={selectedDoc?.document_name === doc.document_name ? "default" : "outline"}
-              onClick={() => setSelectedDoc(doc)}
-              title={`${doc.chunk_count} chunks`}
+          <span className="text-xs text-muted-foreground mr-1">Chapters:</span>
+          {documents.map((doc) => {
+            const isSelected = selectedDocs.has(doc.document_name);
+            return (
+              <button
+                key={doc.document_name}
+                type="button"
+                onClick={() => toggleDoc(doc.document_name)}
+                title={`${doc.chunk_count} chunks`}
+                aria-pressed={isSelected}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                  isSelected
+                    ? "bg-success text-success-foreground hover:bg-success/90"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {doc.label}
+                {isSelected && <span aria-hidden="true">×</span>}
+              </button>
+            );
+          })}
+          {selectedDocs.size > 0 && (
+            <button
+              type="button"
+              onClick={clearDocs}
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline ml-1"
             >
-              {doc.label}
-            </Button>
-          ))}
+              Clear ({selectedDocs.size})
+            </button>
+          )}
         </div>
       )}
 
@@ -110,9 +134,9 @@ export default function ChatPage() {
         )}
         {messages.length === 0 && documents.length > 0 && (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            {selectedDoc
-              ? `Searching only "${selectedDoc.label}" — ask away, or pick "All chapters" to widen the search.`
-              : "Pick a chapter above to narrow your search, or ask anything to search everything."}
+            {selectedDocs.size > 0
+              ? `Searching ${selectedDocs.size} selected chapter${selectedDocs.size > 1 ? "s" : ""} — ask away, or clear the selection to widen the search.`
+              : "Pick one or more chapters above to narrow your search, or ask anything to search everything."}
           </p>
         )}
         {messages.map((m, i) => (
@@ -143,8 +167,8 @@ export default function ChatPage() {
       >
         <ChatInputTextArea
           placeholder={
-            selectedDoc
-              ? `Ask a doubt about ${selectedDoc.label}...`
+            selectedDocs.size > 0
+              ? `Ask a doubt about ${selectedDocs.size} selected chapter${selectedDocs.size > 1 ? "s" : ""}...`
               : "Ask a doubt about your course..."
           }
         />
