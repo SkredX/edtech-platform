@@ -1,16 +1,31 @@
 import Link from "next/link";
 import { InteractiveRobotSpline } from "@/components/ui/interactive-3d-robot";
 import { StackedCircularFooter } from "@/components/ui/stacked-circular-footer";
+import { EtheralShadow } from "@/components/ui/etheral-shadow";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
   return (
     <main>
       <div className="relative w-screen h-screen overflow-hidden">
+        {/* Layer 0: 3D robot — fully interactive, pointer events intact */}
         <InteractiveRobotSpline
           scene="https://prod.spline.design/PyzDhpQ9E5f1E3MT/scene.splinecode"
           className="absolute inset-0 z-0"
         />
+
+        {/* Layer 1: Etheral shadow background — purely decorative, no pointer events */}
+        <div className="absolute inset-0 z-[1] pointer-events-none">
+          <EtheralShadow
+            color="rgba(99, 102, 241, 0.35)"
+            animation={{ scale: 60, speed: 70 }}
+            noise={{ opacity: 0.4, scale: 1.2 }}
+            sizing="fill"
+          />
+        </div>
+
+        {/* Layer 10: Text + buttons — pointer-events-none on the wrapper,
+            re-enabled only on the interactive button group */}
         <div className="absolute inset-0 z-10 pt-20 md:pt-32 px-4 pointer-events-none">
           <div className="text-center text-white drop-shadow-lg max-w-2xl mx-auto">
             <h1 className="text-3xl md:text-5xl font-bold">
