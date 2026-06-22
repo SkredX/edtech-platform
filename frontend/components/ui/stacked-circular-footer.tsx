@@ -34,7 +34,7 @@ function StackedCircularFooter() {
           </div>
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              © 2026 SkredX-EdTech All rights reserved.
+              © 2026 Prajna All rights reserved.
             </p>
           </div>
         </div>

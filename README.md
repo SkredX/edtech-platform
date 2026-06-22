@@ -1,4 +1,4 @@
-# RAG Chatbot + CloneGen Platform
+# Prajna (प्रज्ञा) - The advanced EdTech platform for tomorrow
 
 Unified backend (FastAPI) serving a document-ingestion pipeline, a RAG chatbot,
 and CloneGen MCQ generation, all sharing one Pinecone index and one semantic

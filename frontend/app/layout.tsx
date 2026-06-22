@@ -4,7 +4,7 @@ import { ApiKeySettings } from "@/components/ui/api-key-settings";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SkredX-EdTech — AI Study Assistant",
+  title: "Prajna - Next gen EdTech",
   description: "Curriculum-aligned RAG chatbot and adaptive question bank for NEET/JEE prep.",
 };
 

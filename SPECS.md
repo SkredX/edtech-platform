@@ -1,4 +1,4 @@
-# SkredX EdTech RAG Platform — Technical Specifications
+# Prajna प्(रज्ञा) — Technical Specifications
 
 > **Scope:** Full stack specification covering every technology, library, algorithm, and design decision in the platform, with precise assignment to the layer or module where each is used.
 
@@ -26,7 +26,7 @@
 
 ## 1. System Overview
 
-SkredX-EdTech is a curriculum-aligned RAG (Retrieval-Augmented Generation) platform built for NEET/JEE exam preparation. It has three user-facing capabilities:
+Prajna-EdTech is a curriculum-aligned RAG (Retrieval-Augmented Generation) platform built for NEET/JEE exam preparation. It has three user-facing capabilities:
 
 **Doubt Assistant (`/chat`)** — A student pastes or types a doubt. The system retrieves the most relevant passages from the institute's own uploaded course material and generates a structured answer grounded exclusively in that material. If the question is not covered, it escalates to a teacher rather than hallucinating.
 
