@@ -1,4 +1,4 @@
-# Prajna प्(रज्ञा) — Technical Specifications
+# Prajna (प्रज्ञा) — Technical Specifications
 
 > **Scope:** Full stack specification covering every technology, library, algorithm, and design decision in the platform, with precise assignment to the layer or module where each is used.
 
