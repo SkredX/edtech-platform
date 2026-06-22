@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from groq import Groq
 from pydantic import BaseModel
@@ -7,7 +9,6 @@ from app.config import settings
 from app.core.cache import get_cached, set_cached
 from app.core.retrieval import compress_chunk_text, retrieve_context
 from app.tenants.auth import get_tenant_id
-import logging
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -53,7 +54,7 @@ Sources: "Photosynthesis Overview | p.12\""""
 class ChatRequest(BaseModel):
     message: str
     document_name: str | None = None  # deprecated single-chapter filter, kept for back-compat
-    document_names: list[str] | None = None  # set when the chapter picker scopes the query to one or more chapters
+    document_names: list[str] | None = None  # set when the chapter picker scopes the query
 
 
 class ChatResponse(BaseModel):
@@ -73,16 +74,19 @@ def chat(req: ChatRequest, tenant_id: str = Depends(get_tenant_id)):
     # unscoped answer to the same question aren't necessarily the same.
     doc_key = ",".join(sorted(doc_names)) if doc_names else ""
     cache_key = f"{req.message}|docs={doc_key}"
-    cached = get_cached(tenant_id, cache_key, scope="chat")
-    if cached:
-        return {**cached, "from_cache": True}
+
+    # get_cached now returns (response_or_None, query_vector).
+    # The query vector is always computed here (one Pinecone embed call) and
+    # passed into set_cached on a miss, so set_cached never needs to re-embed
+    # the same string — saving one Pinecone Inference call per cache-miss turn.
+    cached_response, q_vec = get_cached(tenant_id, cache_key, scope="chat")
+    if cached_response is not None:
+        return {**cached_response, "from_cache": True}
 
     # rerank=True: pulls a wider local candidate pool and re-scores it with
     # TF-IDF before picking the final top_k — costs zero extra API calls
     # (Pinecone query stays a single round trip) but materially improves
-    # which 5 chunks make it into the Groq prompt, which is the single
-    # biggest lever on whether the (paid) answer is good on the first try
-    # instead of needing a follow-up/retry.
+    # which 5 chunks make it into the Groq prompt.
     chunks, confidence = retrieve_context(
         tenant_id, req.message, top_k=5, rerank=True, document_names=doc_names
     )
@@ -99,8 +103,7 @@ def chat(req: ChatRequest, tenant_id: str = Depends(get_tenant_id)):
     # Extractive compression (local TF-IDF sentence scoring, see
     # core/retrieval.py) shrinks each chunk to its most query-relevant
     # sentences before it goes into the prompt — cuts Groq input tokens on
-    # long chunks without an extra API call, and as a side effect gives the
-    # model a tighter, less rambling source to draw from.
+    # long chunks without an extra API call.
     context_block = "\n\n".join(
         f"[{c.get('semantic_topic', 'Context')} | p.{c.get('source_page', '?')}] "
         f"{compress_chunk_text(req.message, c.get('text', ''))}"
@@ -119,5 +122,8 @@ def chat(req: ChatRequest, tenant_id: str = Depends(get_tenant_id)):
     answer = resp.choices[0].message.content
 
     result = {"answer": answer, "escalate": False}
-    set_cached(tenant_id, cache_key, scope="chat", response=result)
+
+    # Pass the pre-computed query vector so set_cached doesn't embed again.
+    set_cached(tenant_id, cache_key, scope="chat", response=result, pre_computed_vector=q_vec)
+
     return {**result, "from_cache": False}

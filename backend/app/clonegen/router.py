@@ -43,9 +43,11 @@ def generate_clones(req: CloneRequest, tenant_id: str = Depends(get_tenant_id)):
     n = max(1, min(10, req.n_clones))
     cache_key = f"{req.raw_seed}|{correct_letter}|n={n}"
 
-    cached = get_cached(tenant_id, cache_key, scope="clone")
-    if cached:
-        return {**cached, "from_cache": True}
+    # get_cached now returns (response_or_None, query_vector).
+    # Thread the vector into set_cached to avoid a second embed_query call.
+    cached_response, q_vec = get_cached(tenant_id, cache_key, scope="clone")
+    if cached_response is not None:
+        return {**cached_response, "from_cache": True}
 
     query = extract_core_topic(parsed["stem"], parsed["options"])
     chunks, _ = retrieve_context(tenant_id, query, top_k=6, rerank=True)
@@ -64,6 +66,7 @@ def generate_clones(req: CloneRequest, tenant_id: str = Depends(get_tenant_id)):
     )
 
     if "error" not in result:
-        set_cached(tenant_id, cache_key, scope="clone", response=result)
+        # Pass the pre-computed vector — set_cached won't re-embed.
+        set_cached(tenant_id, cache_key, scope="clone", response=result, pre_computed_vector=q_vec)
 
     return {**result, "from_cache": False}
