@@ -10,11 +10,6 @@ Updated for pinecone-client v9 (ground-up rewrite, June 2026):
     docs now explicitly discourage targeting an index by name for data
     operations, so we look the host up once via `describe_index` and
     cache the handle.
-
-EMBEDDING_DIM is 1024 to match llama-text-embed-v2's output dimension.
-(Previously 384 for all-MiniLM-L6-v2 — that model is no longer used.)
-If you already created your Pinecone index at dimension 384, you must
-delete it and let this code recreate it at 1024, then re-ingest all docs.
 """
 from functools import lru_cache
 
@@ -22,7 +17,7 @@ from pinecone import Pinecone, ServerlessSpec
 
 from app.config import settings
 
-EMBEDDING_DIM = 1024  # llama-text-embed-v2 output dimension
+EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output dimension
 
 
 @lru_cache(maxsize=1)
